@@ -30,8 +30,15 @@ var images = {};
 
 
 // This section is where you will be doing most of your coding
-class Enemy {
+class Entity {
+    render(ctx) {
+        ctx.drawImage(this.sprite, this.x, this.y);
+    }
+}
+
+class Enemy extends Entity {
     constructor(xPos) {
+        super();
         this.x = xPos;
         this.y = -ENEMY_HEIGHT;
         this.sprite = images['enemy.png'];
@@ -43,14 +50,11 @@ class Enemy {
     update(timeDiff) {
         this.y = this.y + timeDiff * this.speed;
     }
-
-    render(ctx) {
-        ctx.drawImage(this.sprite, this.x, this.y);
-    }
 }
 
-class Player {
+class Player extends Entity {
     constructor() {
+        super();
         this.x = 2 * PLAYER_WIDTH;
         this.y = GAME_HEIGHT - PLAYER_HEIGHT - 10;
         this.sprite = images['player.png'];
@@ -64,10 +68,6 @@ class Player {
         else if (direction === MOVE_RIGHT && this.x < GAME_WIDTH - PLAYER_WIDTH) {
             this.x = this.x + PLAYER_WIDTH;
         }
-    }
-
-    render(ctx) {
-        ctx.drawImage(this.sprite, this.x, this.y);
     }
 }
 
@@ -117,10 +117,10 @@ class Engine {
     // This method finds a random spot where there is no enemy, and puts one in there
     addEnemy() {
         var enemySpots = GAME_WIDTH / ENEMY_WIDTH;
-
+        //console.log(enemySpots);
         var enemySpot;
         // Keep looping until we find a free enemy spot at random
-        while (!enemySpot || this.enemies[enemySpot]) {
+        while (enemySpot === undefined || this.enemies[enemySpot]) {
             enemySpot = Math.floor(Math.random() * enemySpots);
         }
 
@@ -199,7 +199,16 @@ class Engine {
     }
 
     isPlayerDead() {
-        // TODO: fix this function!
+        for (var i in this.enemies) {
+            //Check if the enemy is in the same column as the player
+            if (this.enemies[i].x === this.player.x) {
+                //check if the player's length is overlapping the matching column's enemy length
+                // if [player's y] < [enemy's y+height] && [player's y+height] > [enemy's y], then there's an overlap
+                if ((this.player.y < (this.enemies[i].y+ENEMY_HEIGHT)) && ((this.player.y+PLAYER_HEIGHT) > this.enemies[i].y)) {
+                    return true;
+                }
+            }
+        }
         return false;
     }
 }
