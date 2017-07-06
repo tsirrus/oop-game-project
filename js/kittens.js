@@ -1,3 +1,12 @@
+"use strict";
+// Changelog
+// -Added Lives (froze score, displayed lives, changed color)
+// -Added invincibility
+// -Added WASD codes, adapted left-right
+// -Added restart (on space)
+// -Implemented up / down moves
+
+
 // This sectin contains some game constants. It is not super interesting
 var GAME_WIDTH = 375;
 var GAME_HEIGHT = 500;
@@ -12,10 +21,21 @@ var PLAYER_HEIGHT = 54;
 // These two constants keep us from using "magic numbers" in our code
 var LEFT_ARROW_CODE = 37;
 var RIGHT_ARROW_CODE = 39;
+var UP_ARROW_CODE = 38;
+var DOWN_ARROW_CODE = 40;
+// Can't be a gamer without WASD
+var W_CODE = 87;
+var A_CODE = 65;
+var S_CODE = 83;
+var D_CODE = 68;
+// The Jesus key
+var SPACEBAR_CODE = 32;
 
-// These two constants allow us to DRY
+// These constants allow us to DRY
 var MOVE_LEFT = 'left';
 var MOVE_RIGHT = 'right';
+var MOVE_UP = 'up';
+var MOVE_DOWN = 'down';
 
 // Preload game images
 var images = {};
@@ -44,7 +64,7 @@ class Enemy extends Entity {
         this.sprite = images['enemy.png'];
 
         // Each enemy should have a different speed
-        this.speed = Math.random() / 2 + 0.25;
+        this.speed = Math.random() / 2 + 0.25; //goes from .25 to .75
     }
 
     update(timeDiff) {
@@ -58,6 +78,8 @@ class Player extends Entity {
         this.x = 2 * PLAYER_WIDTH;
         this.y = GAME_HEIGHT - PLAYER_HEIGHT - 10;
         this.sprite = images['player.png'];
+        this.lives = 3;
+        this.invincibleScore = 0;
     }
 
     // This method is called by the game engine when left/right arrows are pressed
@@ -67,6 +89,12 @@ class Player extends Entity {
         }
         else if (direction === MOVE_RIGHT && this.x < GAME_WIDTH - PLAYER_WIDTH) {
             this.x = this.x + PLAYER_WIDTH;
+        }
+        else if (direction === MOVE_UP && this.y > PLAYER_HEIGHT) {
+            this.y = this.y - PLAYER_HEIGHT;
+        }
+        else if (direction === MOVE_DOWN && this.y < GAME_HEIGHT - PLAYER_HEIGHT) {
+            this.y = this.y + PLAYER_HEIGHT;
         }
     }
 }
@@ -128,19 +156,38 @@ class Engine {
     }
 
     // This method kicks off the game
-    start() {
+    start(reboot) {
         this.score = 0;
         this.lastFrame = Date.now();
 
-        // Listen for keyboard left/right and update the player
-        document.addEventListener('keydown', e => {
-            if (e.keyCode === LEFT_ARROW_CODE) {
-                this.player.move(MOVE_LEFT);
-            }
-            else if (e.keyCode === RIGHT_ARROW_CODE) {
-                this.player.move(MOVE_RIGHT);
-            }
-        });
+        //Check if first time loading
+        if (!reboot) {
+            // Listen for keyboard left/right (or WASD equivalent) and update the player
+            document.addEventListener('keydown', e => {
+                if (e.keyCode === LEFT_ARROW_CODE || e.keyCode === A_CODE) {
+                    this.player.move(MOVE_LEFT);
+                }
+                else if (e.keyCode === RIGHT_ARROW_CODE || e.keyCode === D_CODE) {
+                    this.player.move(MOVE_RIGHT);
+                }
+                else if (e.keyCode === UP_ARROW_CODE || e.keyCode === W_CODE) {
+                    this.player.move(MOVE_UP);
+                }
+                else if (e.keyCode === DOWN_ARROW_CODE || e.keyCode === S_CODE) {
+                    this.player.move(MOVE_DOWN);
+                }
+                else if ((e.keyCode === SPACEBAR_CODE)) {
+                    if (this.isPlayerDead()) {
+                        reboot = true; //flag to prevent re-adding listeners
+                        this.player.lives = 3; // Reset lives! Duh!
+                        this.player.invincibleScore = 2000; // Allow the player to find his composure
+                        //this.ennemies = []; can't erase ennemies???
+                        this.start(reboot);
+                        //console.log(reboot);
+                    }
+                }
+            });
+        }
 
         this.gameLoop();
     }
@@ -159,9 +206,18 @@ class Engine {
         // Check how long it's been since last frame
         var currentFrame = Date.now();
         var timeDiff = currentFrame - this.lastFrame;
-
-        // Increase the score!
-        this.score += timeDiff;
+        
+        //Check if player's invincible
+        if (this.player.invincibleScore > 0) {
+            this.player.invincibleScore -= timeDiff;
+            //Red score line too show dmg!
+            this.ctx.fillStyle = '#ff0000';
+        } 
+        else {
+            // Increase the score only if not invincible!
+            this.ctx.fillStyle = '#ffffff';
+            this.score += timeDiff;
+        }
 
         // Call update on all enemies
         this.enemies.forEach(enemy => enemy.update(timeDiff));
@@ -183,15 +239,14 @@ class Engine {
         if (this.isPlayerDead()) {
             // If they are dead, then it's game over!
             this.ctx.font = 'bold 30px Impact';
-            this.ctx.fillStyle = '#ffffff';
             this.ctx.fillText(this.score + ' GAME OVER', 5, 30);
+            this.ctx.fillText('Press Space to Restart', 5, GAME_HEIGHT / 2);
         }
         else {
             // If player is not dead, then draw the score
             this.ctx.font = 'bold 30px Impact';
-            this.ctx.fillStyle = '#ffffff';
             this.ctx.fillText(this.score, 5, 30);
-
+            this.ctx.fillText('Lives: ' + this.player.lives, GAME_WIDTH - 100, 30);
             // Set the time marker and redraw
             this.lastFrame = Date.now();
             requestAnimationFrame(this.gameLoop);
@@ -200,12 +255,22 @@ class Engine {
 
     isPlayerDead() {
         for (var i in this.enemies) {
-            //Check if the enemy is in the same column as the player
-            if (this.enemies[i].x === this.player.x) {
-                //check if the player's length is overlapping the matching column's enemy length
-                // if [player's y] < [enemy's y+height] && [player's y+height] > [enemy's y], then there's an overlap
-                if ((this.player.y < (this.enemies[i].y+ENEMY_HEIGHT)) && ((this.player.y+PLAYER_HEIGHT) > this.enemies[i].y)) {
-                    return true;
+            //Check if player is invincible
+            if (this.player.invincibleScore <= 0) {
+                //Check if the enemy is in the same column as the player
+                if ((this.player.x < (this.enemies[i].x + ENEMY_WIDTH)) && ((this.player.x + PLAYER_WIDTH) > this.enemies[i].x )) {
+                    //check if the player's length is overlapping the matching column's enemy length
+                    // if [player's y] < [enemy's y+height] && [player's y+height] > [enemy's y], then there's an overlap
+                    if ((this.player.y < (this.enemies[i].y+ENEMY_HEIGHT)) && ((this.player.y+PLAYER_HEIGHT) > this.enemies[i].y)) {
+                        if (this.player.lives > 0) {
+                            this.player.lives--; //Lose a life
+                            // Be invincibleScore for 1000 scores
+                            this.player.invincibleScore = 1000;
+                        }
+                        else {
+                            return true;
+                        }
+                    }
                 }
             }
         }
@@ -219,4 +284,4 @@ class Engine {
 
 // This section will start the game
 var gameEngine = new Engine(document.getElementById('app'));
-gameEngine.start();
+gameEngine.start(false);
