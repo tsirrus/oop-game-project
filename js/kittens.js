@@ -5,15 +5,19 @@
 // -Added WASD codes, adapted left-right
 // -Added restart (on space)
 // -Implemented up / down moves
+// -Increased Canvas, added score section
+// -Added difficulty gradient
 
 
 // This sectin contains some game constants. It is not super interesting
-var GAME_WIDTH = 375;
-var GAME_HEIGHT = 500;
+var APP_WIDTH = 850;
+var APP_HEIGHT = 700
+var GAME_WIDTH = 600;
+var GAME_HEIGHT = APP_HEIGHT;
 
 var ENEMY_WIDTH = 75;
 var ENEMY_HEIGHT = 156;
-var MAX_ENEMIES = 3;
+var MAX_ENEMIES = (GAME_WIDTH / ENEMY_WIDTH) - 3;
 
 var PLAYER_WIDTH = 75;
 var PLAYER_HEIGHT = 54;
@@ -39,7 +43,7 @@ var MOVE_DOWN = 'down';
 
 // Preload game images
 var images = {};
-['enemy.png', 'stars.png', 'player.png'].forEach(imgName => {
+['enemy.png', 'stars.png', 'player.png', 'NetSpace5.png'].forEach(imgName => {
     var img = document.createElement('img');
     img.src = 'images/' + imgName;
     images[imgName] = img;
@@ -51,8 +55,18 @@ var images = {};
 
 // This section is where you will be doing most of your coding
 class Entity {
+    constructor() {
+        this.horizontalSpeed = 0;
+        this.verticalSpeed = 0;
+    }
+    
     render(ctx) {
         ctx.drawImage(this.sprite, this.x, this.y);
+    }
+    
+    update(timeDiff) {
+        this.x = this.x + timeDiff * this.horizontalSpeed;
+        this.y = this.y + timeDiff * this.verticalSpeed;
     }
 }
 
@@ -64,11 +78,7 @@ class Enemy extends Entity {
         this.sprite = images['enemy.png'];
 
         // Each enemy should have a different speed
-        this.speed = Math.random() / 2 + 0.25; //goes from .25 to .75
-    }
-
-    update(timeDiff) {
-        this.y = this.y + timeDiff * this.speed;
+        this.verticalSpeed = Math.random() / 2 + 0.25; //goes from .25 to .75
     }
 }
 
@@ -80,22 +90,70 @@ class Player extends Entity {
         this.sprite = images['player.png'];
         this.lives = 3;
         this.invincibleScore = 0;
+        //this.horizontalSpeed = .35;
+        //this.verticalSpeed = .15;
     }
 
     // This method is called by the game engine when left/right arrows are pressed
     move(direction) {
         if (direction === MOVE_LEFT && this.x > 0) {
-            this.x = this.x - PLAYER_WIDTH;
+            if (this.horizontalSpeed > 0) {
+                this.horizontalSpeed = -5;
+            }
+            else if (this.horizontalSpeed >= -8) {
+                this.horizontalSpeed -= 3;
+            }
         }
-        else if (direction === MOVE_RIGHT && this.x < GAME_WIDTH - PLAYER_WIDTH) {
-            this.x = this.x + PLAYER_WIDTH;
+        else if (direction === MOVE_RIGHT && ((this.x + PLAYER_WIDTH) < GAME_WIDTH)) {
+            if (this.horizontalSpeed < 0) {
+                this.horizontalSpeed = 5;
+            }
+            else if (this.horizontalSpeed <= 8) {
+                this.horizontalSpeed += 3;
+            }
         }
-        else if (direction === MOVE_UP && this.y > PLAYER_HEIGHT) {
-            this.y = this.y - PLAYER_HEIGHT;
+        else if (direction === MOVE_UP && this.y > 0) {
+            if (this.verticalSpeed > 0) {
+                this.verticalSpeed -= 4;
+            }
+            else if (this.verticalSpeed >= -6) {
+                this.verticalSpeed -= 2;
+            }
         }
-        else if (direction === MOVE_DOWN && this.y < GAME_HEIGHT - PLAYER_HEIGHT) {
-            this.y = this.y + PLAYER_HEIGHT;
+        else if (direction === MOVE_DOWN && ((this.y + PLAYER_HEIGHT) < GAME_HEIGHT)) {
+            if (this.verticalSpeed < 0) {
+                this.verticalSpeed += 4;
+            }
+            else if (this.verticalSpeed < 6) {
+                this.verticalSpeed += 2;
+            }
         }
+    }
+    
+    updateHorizontal(timeDiff) {
+        if ((this.x + this.horizontalSpeed > 0) && (this.x + PLAYER_WIDTH + this.horizontalSpeed < GAME_WIDTH)) {
+            this.x = (this.x + this.horizontalSpeed);
+        }
+        else {
+            this.horizontalSpeed = Math.round(this.horizontalSpeed - this.horizontalSpeed/2);
+        }
+        if (this.x === 1) {
+            this.x = 0;
+        }
+        else if (this.x === GAME_WIDTH-PLAYER_WIDTH-1) {
+            this.x = GAME_WIDTH-PLAYER_WIDTH;
+        }
+        //console.log("X=" + this.x + " HSpeed=" + this.horizontalSpeed);
+    }
+    
+    updateVertical(timeDiff) {
+        if ((this.y + this.verticalSpeed > 0) && (this.y + PLAYER_HEIGHT + this.verticalSpeed < GAME_HEIGHT)) {
+            this.y += this.verticalSpeed;
+        }
+        else {
+            this.verticalSpeed = 0;
+        }
+        //console.log("Y=" + this.y + "VSpeed=" + this.verticalSpeed);
     }
 }
 
@@ -112,14 +170,14 @@ class Engine {
     constructor(element) {
         // Setup the player
         this.player = new Player();
-
+        this.currentMaxEnemies = 1;
         // Setup enemies, making sure there are always three
         this.setupEnemies();
 
         // Setup the <canvas> element where we will be drawing
         var canvas = document.createElement('canvas');
-        canvas.width = GAME_WIDTH;
-        canvas.height = GAME_HEIGHT;
+        canvas.width = APP_WIDTH;
+        canvas.height = APP_HEIGHT;
         element.appendChild(canvas);
 
         this.ctx = canvas.getContext('2d');
@@ -137,7 +195,7 @@ class Engine {
             this.enemies = [];
         }
 
-        while (this.enemies.filter(e => !!e).length < MAX_ENEMIES) {
+        while (this.enemies.filter(e => !!e).length < this.currentMaxEnemies) {
             this.addEnemy();
         }
     }
@@ -159,7 +217,7 @@ class Engine {
     start(reboot) {
         this.score = 0;
         this.lastFrame = Date.now();
-
+        //console.log("Reboot = " + reboot);
         //Check if first time loading
         if (!reboot) {
             // Listen for keyboard left/right (or WASD equivalent) and update the player
@@ -181,7 +239,7 @@ class Engine {
                         reboot = true; //flag to prevent re-adding listeners
                         this.player.lives = 3; // Reset lives! Duh!
                         this.player.invincibleScore = 2000; // Allow the player to find his composure
-                        //this.ennemies = []; can't erase ennemies???
+                        this.currentMaxEnemies = 1;
                         this.start(reboot);
                         //console.log(reboot);
                     }
@@ -221,9 +279,14 @@ class Engine {
 
         // Call update on all enemies
         this.enemies.forEach(enemy => enemy.update(timeDiff));
+        this.player.updateHorizontal(timeDiff);
+        this.player.updateVertical(timeDiff);
+        this.updateDifficulty();
 
         // Draw everything!
-        this.ctx.drawImage(images['stars.png'], 0, 0); // draw the star bg
+        
+        this.ctx.drawImage(images['NetSpace5.png'], 0, 0); // draw the star bg
+        this.ctx.drawImage(images['stars.png'], GAME_WIDTH, 0); // Draw score section
         this.enemies.forEach(enemy => enemy.render(this.ctx)); // draw the enemies
         this.player.render(this.ctx); // draw the player
 
@@ -239,14 +302,14 @@ class Engine {
         if (this.isPlayerDead()) {
             // If they are dead, then it's game over!
             this.ctx.font = 'bold 30px Impact';
-            this.ctx.fillText(this.score + ' GAME OVER', 5, 30);
-            this.ctx.fillText('Press Space to Restart', 5, GAME_HEIGHT / 2);
+            this.ctx.fillText(this.score + ' GAME OVER', GAME_WIDTH + 5, 30);
+            this.ctx.fillText('Press Space to Restart', GAME_WIDTH/2, GAME_HEIGHT / 2);
         }
         else {
             // If player is not dead, then draw the score
             this.ctx.font = 'bold 30px Impact';
-            this.ctx.fillText(this.score, 5, 30);
-            this.ctx.fillText('Lives: ' + this.player.lives, GAME_WIDTH - 100, 30);
+            this.ctx.fillText(this.score, GAME_WIDTH + 5, 30);
+            this.ctx.fillText('Lives: ' + this.player.lives, APP_WIDTH - 100, 30);
             // Set the time marker and redraw
             this.lastFrame = Date.now();
             requestAnimationFrame(this.gameLoop);
@@ -275,6 +338,13 @@ class Engine {
             }
         }
         return false;
+    }
+    
+    updateDifficulty() {
+        if (this.currentMaxEnemies <= MAX_ENEMIES) { 
+            this.currentMaxEnemies = Math.ceil(this.score / 10000);
+            console.log("CurrentMaxE=" + this.currentMaxEnemies + " Score=" + this.score);
+        }
     }
 }
 
