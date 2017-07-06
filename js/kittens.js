@@ -416,7 +416,7 @@ class Engine {
                         this.player.lives++; //Gain a life
                         delete this.bonuses[i];
                         //reduce the max bonuses
-                        this.currentMaxBonuses--;
+                        //this.currentMaxBonuses--;
                     }
                 }
             }
@@ -428,7 +428,7 @@ class Engine {
     updateDifficulty() {
         if (this.currentMaxEnemies <= MAX_ENEMIES) { 
             this.currentMaxEnemies = Math.ceil(this.score / 10000);
-            this.currentMaxBonuses = Math.floor(Math.random() * this.currentMaxEnemies / 3);
+            this.currentMaxBonuses = Math.floor(Math.random() * this.currentMaxEnemies / 2);
             //console.log("CurrentMaxE=" + this.currentMaxEnemies + " Score=" + this.score);
         }
         
