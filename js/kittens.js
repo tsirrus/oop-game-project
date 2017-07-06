@@ -22,6 +22,9 @@ var MAX_ENEMIES = (GAME_WIDTH / ENEMY_WIDTH) - 3;
 var PLAYER_WIDTH = 75;
 var PLAYER_HEIGHT = 54;
 
+var BONUS_WIDTH = 75;
+var BONUS_HEIGHT = 54;
+
 // These two constants keep us from using "magic numbers" in our code
 var LEFT_ARROW_CODE = 37;
 var RIGHT_ARROW_CODE = 39;
@@ -82,6 +85,19 @@ class Enemy extends Entity {
     }
 }
 
+class Bonus extends Entity {
+    constructor(xPos) {
+        super();
+        this.x = xPos;
+        this.y = GAME_HEIGHT;
+        this.sprite = images['player.png'];
+
+        // Each enemy should have a different speed
+        this.verticalSpeed = -(Math.random() / 2); //goes from .25 to .75
+    }
+}   
+
+
 class Player extends Entity {
     constructor() {
         super();
@@ -114,7 +130,7 @@ class Player extends Entity {
             if (this.verticalSpeed > 0) {
                 this.verticalSpeed -= .1;
             }
-            else if (this.verticalSpeed >= -.55) {
+            else if (this.verticalSpeed >= -.6) {
                 this.verticalSpeed -= .05;
             }
         }
@@ -122,7 +138,7 @@ class Player extends Entity {
             if (this.verticalSpeed < 0) {
                 this.verticalSpeed += .1;
             }
-            else if (this.verticalSpeed < .25) {
+            else if (this.verticalSpeed < .6) {
                 this.verticalSpeed += .05;
             }
         }
@@ -181,8 +197,10 @@ class Engine {
         // Setup the player
         this.player = new Player();
         this.currentMaxEnemies = 1;
+        this.currentMaxBonuses = 1;
         // Setup enemies, making sure there are always three
         this.setupEnemies();
+        this.setupBonuses();
 
         // Setup the <canvas> element where we will be drawing
         var canvas = document.createElement('canvas');
@@ -210,6 +228,7 @@ class Engine {
         }
     }
 
+
     // This method finds a random spot where there is no enemy, and puts one in there
     addEnemy() {
         var enemySpots = GAME_WIDTH / ENEMY_WIDTH;
@@ -221,6 +240,28 @@ class Engine {
         }
 
         this.enemies[enemySpot] = new Enemy(enemySpot * ENEMY_WIDTH);
+    }
+
+    
+    setupBonuses() {
+        if (!this.bonuses) {
+            this.bonuses = [];
+        }
+
+        while (this.bonuses.filter(e => !!e).length < this.currentMaxBonuses) {
+            this.addBonus();
+        }
+    }
+    
+    addBonus() {
+        var bonusSpots = GAME_WIDTH / BONUS_WIDTH;
+        var bonusSpot;
+        // Keep looping until we find a free bonus spot at random
+        while (bonusSpot === undefined || this.bonuses[bonusSpot]) {
+            bonusSpot = Math.floor(Math.random() * bonusSpots);
+        }
+
+        this.bonuses[bonusSpot] = new Bonus(bonusSpot * BONUS_WIDTH);
     }
 
     // This method kicks off the game
@@ -289,7 +330,7 @@ class Engine {
         //console.log("TimeDiff = " + timeDiff);
         // Call update on all enemies
         this.enemies.forEach(enemy => enemy.update(timeDiff));
-        //this.enemies.forEach(enemy => enemy.update(timeDiff, this.player.horizontalSpeed, this.player.verticalSpeed));
+        this.bonuses.forEach(bonus => bonus.update(timeDiff));
         this.player.updateHorizontal(timeDiff);
         this.player.updateVertical(timeDiff);
         this.updateDifficulty();
@@ -299,6 +340,7 @@ class Engine {
         this.ctx.drawImage(images['NetSpace5.png'], 0, 0); // draw the star bg
         this.ctx.drawImage(images['stars.png'], GAME_WIDTH, 0); // Draw score section
         this.enemies.forEach(enemy => enemy.render(this.ctx)); // draw the enemies
+        this.bonuses.forEach(bonus => bonus.render(this.ctx)); // draw the bonuses
         this.player.render(this.ctx); // draw the player
 
         // Check if any enemies should die
@@ -308,6 +350,14 @@ class Engine {
             }
         });
         this.setupEnemies();
+        
+        // Check if any bonuses should die
+        this.bonuses.forEach((bonus, bonusIdx) => {
+            if (bonus.y + BONUS_HEIGHT < 0) {
+                delete this.bonuses[bonusIdx];
+            }
+        });
+        this.setupBonuses();
 
         // Check if player is dead
         if (this.isPlayerDead()) {
@@ -324,6 +374,7 @@ class Engine {
             // Set the time marker and redraw
             this.lastFrame = Date.now();
             requestAnimationFrame(this.gameLoop);
+            this.checkBonusPicked();
         }
     }
 
@@ -341,6 +392,10 @@ class Engine {
                             this.player.lives--; //Lose a life
                             // Be invincibleScore for 1000 scores
                             this.player.invincibleScore = 1000;
+                            
+                            if (this.currentMaxBonuses < 2) {
+                                this.currentMaxBonuses++;
+                            }
                         }
                         else {
                             return true;
@@ -352,12 +407,31 @@ class Engine {
         return false;
     }
     
+    //NOT DRYed!!
+    checkBonusPicked() {
+        for (var i in this.bonuses) {
+            if ((this.player.x < (this.bonuses[i].x + BONUS_WIDTH)) && ((this.player.x + PLAYER_WIDTH) > this.bonuses[i].x )) {
+                if ((this.player.y < (this.bonuses[i].y+BONUS_HEIGHT)) && ((this.player.y+PLAYER_HEIGHT) > this.bonuses[i].y)) {
+                    if (this.player.lives > 0) {
+                        this.player.lives++; //Gain a life
+                        delete this.bonuses[i];
+                        //reduce the max bonuses
+                        this.currentMaxBonuses--;
+                    }
+                }
+            }
+        }
+    }
+    
+    
     //Not DRYed!
     updateDifficulty() {
         if (this.currentMaxEnemies <= MAX_ENEMIES) { 
             this.currentMaxEnemies = Math.ceil(this.score / 10000);
+            this.currentMaxBonuses = Math.floor(Math.random() * this.currentMaxEnemies / 3);
             //console.log("CurrentMaxE=" + this.currentMaxEnemies + " Score=" + this.score);
         }
+        
     }
 }
 
