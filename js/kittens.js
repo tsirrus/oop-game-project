@@ -85,75 +85,85 @@ class Enemy extends Entity {
 class Player extends Entity {
     constructor() {
         super();
-        this.x = 2 * PLAYER_WIDTH;
-        this.y = GAME_HEIGHT - PLAYER_HEIGHT - 10;
+        this.x = GAME_WIDTH/2 - PLAYER_WIDTH/2;
+        this.y = GAME_HEIGHT - PLAYER_HEIGHT - 50;
         this.sprite = images['player.png'];
         this.lives = 3;
         this.invincibleScore = 0;
-        //this.horizontalSpeed = .35;
-        //this.verticalSpeed = .15;
     }
 
     // This method is called by the game engine when left/right arrows are pressed
     move(direction) {
         if (direction === MOVE_LEFT && this.x > 0) {
             if (this.horizontalSpeed > 0) {
-                this.horizontalSpeed = -5;
+                this.horizontalSpeed = -.1;
             }
-            else if (this.horizontalSpeed >= -8) {
-                this.horizontalSpeed -= 3;
+            else if (this.horizontalSpeed >= -.8) {
+                this.horizontalSpeed -= .05;
             }
         }
         else if (direction === MOVE_RIGHT && ((this.x + PLAYER_WIDTH) < GAME_WIDTH)) {
             if (this.horizontalSpeed < 0) {
-                this.horizontalSpeed = 5;
+                this.horizontalSpeed = .1;
             }
-            else if (this.horizontalSpeed <= 8) {
-                this.horizontalSpeed += 3;
+            else if (this.horizontalSpeed <= .8) {
+                this.horizontalSpeed += .05;
             }
         }
         else if (direction === MOVE_UP && this.y > 0) {
             if (this.verticalSpeed > 0) {
-                this.verticalSpeed -= 4;
+                this.verticalSpeed -= .1;
             }
-            else if (this.verticalSpeed >= -6) {
-                this.verticalSpeed -= 2;
+            else if (this.verticalSpeed >= -.55) {
+                this.verticalSpeed -= .05;
             }
         }
         else if (direction === MOVE_DOWN && ((this.y + PLAYER_HEIGHT) < GAME_HEIGHT)) {
             if (this.verticalSpeed < 0) {
-                this.verticalSpeed += 4;
+                this.verticalSpeed += .1;
             }
-            else if (this.verticalSpeed < 6) {
-                this.verticalSpeed += 2;
+            else if (this.verticalSpeed < .25) {
+                this.verticalSpeed += .05;
             }
         }
     }
     
+    //Not DRYed!
     updateHorizontal(timeDiff) {
-        if ((this.x + this.horizontalSpeed > 0) && (this.x + PLAYER_WIDTH + this.horizontalSpeed < GAME_WIDTH)) {
-            this.x = (this.x + this.horizontalSpeed);
+        if (((this.x + timeDiff * this.horizontalSpeed) <= 0) && ((this.x + PLAYER_WIDTH + timeDiff * this.horizontalSpeed) >= GAME_WIDTH)) {
+            this.horizontalSpeed = 0;
         }
-        else {
-            this.horizontalSpeed = Math.round(this.horizontalSpeed - this.horizontalSpeed/2);
-        }
-        if (this.x === 1) {
+        // Correctly stick to the side borders
+        if (Math.floor(this.x) < 0) {
             this.x = 0;
+            if (this.horizontalSpeed < 0) {
+                this.horizontalSpeed = 0;
+            }
         }
-        else if (this.x === GAME_WIDTH-PLAYER_WIDTH-1) {
+        else if (Math.floor(this.x) + PLAYER_WIDTH >= GAME_WIDTH) {
             this.x = GAME_WIDTH-PLAYER_WIDTH;
+            if (this.horizontalSpeed > 0) {
+                this.horizontalSpeed = 0;
+            }
         }
         //console.log("X=" + this.x + " HSpeed=" + this.horizontalSpeed);
+        this.update(timeDiff);
     }
     
+    //Not DRYed!
     updateVertical(timeDiff) {
-        if ((this.y + this.verticalSpeed > 0) && (this.y + PLAYER_HEIGHT + this.verticalSpeed < GAME_HEIGHT)) {
-            this.y += this.verticalSpeed;
-        }
-        else {
+        if ((this.y + timeDiff * this.verticalSpeed <= 0) || (this.y + PLAYER_HEIGHT + timeDiff * this.verticalSpeed >= GAME_HEIGHT)) {
             this.verticalSpeed = 0;
         }
-        //console.log("Y=" + this.y + "VSpeed=" + this.verticalSpeed);
+        
+        if (Math.floor(this.y) < 0) {
+            this.y = 0;
+        }
+        else if (Math.floor(this.y) + PLAYER_HEIGHT >= GAME_HEIGHT) {
+            this.y = GAME_HEIGHT - PLAYER_HEIGHT;
+        }
+        
+        this.update(timeDiff);
     }
 }
 
@@ -246,7 +256,7 @@ class Engine {
                 }
             });
         }
-
+        //this.player.render(this.ctx); // draw the player
         this.gameLoop();
     }
 
@@ -276,9 +286,10 @@ class Engine {
             this.ctx.fillStyle = '#ffffff';
             this.score += timeDiff;
         }
-
+        //console.log("TimeDiff = " + timeDiff);
         // Call update on all enemies
         this.enemies.forEach(enemy => enemy.update(timeDiff));
+        //this.enemies.forEach(enemy => enemy.update(timeDiff, this.player.horizontalSpeed, this.player.verticalSpeed));
         this.player.updateHorizontal(timeDiff);
         this.player.updateVertical(timeDiff);
         this.updateDifficulty();
@@ -324,7 +335,8 @@ class Engine {
                 if ((this.player.x < (this.enemies[i].x + ENEMY_WIDTH)) && ((this.player.x + PLAYER_WIDTH) > this.enemies[i].x )) {
                     //check if the player's length is overlapping the matching column's enemy length
                     // if [player's y] < [enemy's y+height] && [player's y+height] > [enemy's y], then there's an overlap
-                    if ((this.player.y < (this.enemies[i].y+ENEMY_HEIGHT)) && ((this.player.y+PLAYER_HEIGHT) > this.enemies[i].y)) {
+                    // Added 50 pixels to remove the rainbow from the hitbox
+                    if ((this.player.y < (this.enemies[i].y+ENEMY_HEIGHT)) && ((this.player.y+PLAYER_HEIGHT) > this.enemies[i].y + 50)) {
                         if (this.player.lives > 0) {
                             this.player.lives--; //Lose a life
                             // Be invincibleScore for 1000 scores
@@ -340,10 +352,11 @@ class Engine {
         return false;
     }
     
+    //Not DRYed!
     updateDifficulty() {
         if (this.currentMaxEnemies <= MAX_ENEMIES) { 
             this.currentMaxEnemies = Math.ceil(this.score / 10000);
-            console.log("CurrentMaxE=" + this.currentMaxEnemies + " Score=" + this.score);
+            //console.log("CurrentMaxE=" + this.currentMaxEnemies + " Score=" + this.score);
         }
     }
 }
